@@ -1,0 +1,7 @@
+# /etc/ansible/hosts
+
+[app]
+app
+
+[db]
+db
