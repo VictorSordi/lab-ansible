@@ -8,7 +8,7 @@
   vars:
     - dbhost: "db"
     - dbname: "notes"
-    - dbusername: "notesapps"
+    - dbusername: "notesapp"
     - dbpassword: "devops"
   tasks:
     - name: Configure hosts
@@ -25,20 +25,40 @@
         name: app
         comment: application user
         uid: 500
-    - name: Maven Instalation
-      apt:
-        name: maven
-        state: latest
+    - name: Baixar o Maven 
+      get_url: 
+        url: https://archive.apache.org/dist/maven/maven-3/3.8.4/binaries/apache-maven-3.8.4-bin.tar.gz 
+        dest: /tmp/apache-maven-3.8.4-bin.tar.gz 
+    - name: Extrair o Maven 
+      unarchive: 
+        src: /tmp/apache-maven-3.8.4-bin.tar.gz   
+        dest: /opt 
+        remote_src: yes
+        creates: /opt/apache-maven-3.8.4 
+    - name: Criar link simbólico para Maven   
+      file: 
+        src: /opt/apache-maven-3.8.4/bin/mvn 
+        dest: /usr/bin/mvn 
+        state: link
+    - name: Adicionar repositório PPA do Java 
+      apt_repository: 
+        repo: ppa:openjdk-r/ppa   
+        state: present 
+    - name: Atualizar listas de pacotes 
+      apt: 
+        update_cache: yes
     - name: Java Instalation
       apt:
-        name: java-1.8.0-openjdk
-        state: latest
+        name: openjdk-8-jdk
+        state: present
     - name: Create Directory app
       file:
         path: /opt/notes
         state: directory
         owner: app
         group: app
+    - name: Configurar o Git para adicionar exceção para o diretório seguro  
+      command: git config --global --add safe.directory /opt/notes
     - name: Clone repository notes - app
       git:
         repo: 'https://github.com/callicoder/spring-boot-mysql-rest-api-tutorial.git'
@@ -49,9 +69,20 @@
       template:
         src: application.properties
         dest: /opt/notes/src/main/resources/application.properties
+    - name: Configurar permissões para o diretório temporário do Ansible  
+      file: 
+        path: /var/tmp  
+        state: directory  
+        owner: app  
+        group: app  
+        mode: '0777'
     - name: Gerate application package
-        command: mvn -f /opt/notes/pom.xml package
-        become_user: app
+      become: yes
+      become_user: app
+      shell: |
+        export ANSIBLE_REMOTE_TEMP=/var/tmp/ansible-tmp
+        mvn -f /opt/notes/pom.xml package
+      register: mvn_result
     - name: Register package latest version
       shell:
         cmd: mvn -o -q -Dexec.executable=echo -Dexec.args='${project.version}'
@@ -67,7 +98,7 @@
         notes: notes
         state: restarted
   roles:
-    - configuracao-default-so
+      - configure-default-so
   handlers:
     - name: reload app
       systemd:
