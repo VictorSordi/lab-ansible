@@ -10,6 +10,7 @@
     - dbname: "notes"
     - dbusername: "notesapp"
     - dbpassword: "devops"
+
   tasks:
     - name: Configure hosts
       lineinfile:
@@ -20,83 +21,102 @@
         - 192.168.56.2 control-node
         - 192.168.56.3 app
         - 192.168.56.4 db
+
     - name: Add app user
       user:
         name: app
         comment: application user
         uid: 500
-    - name: Baixar o Maven 
+
+    - name: Download Maven 
       get_url: 
         url: https://archive.apache.org/dist/maven/maven-3/3.8.4/binaries/apache-maven-3.8.4-bin.tar.gz 
-        dest: /tmp/apache-maven-3.8.4-bin.tar.gz 
-    - name: Extrair o Maven 
+        dest: /tmp/apache-maven-3.8.4-bin.tar.gz
+
+    - name: Extract Maven 
       unarchive: 
         src: /tmp/apache-maven-3.8.4-bin.tar.gz   
         dest: /opt 
         remote_src: yes
-        creates: /opt/apache-maven-3.8.4 
-    - name: Criar link simbólico para Maven   
+        creates: /opt/apache-maven-3.8.4
+ 
+    - name: Create Link to Maven
       file: 
         src: /opt/apache-maven-3.8.4/bin/mvn 
         dest: /usr/bin/mvn 
         state: link
-    - name: Adicionar repositório PPA do Java 
+
+    - name: Add PPA java repository
       apt_repository: 
         repo: ppa:openjdk-r/ppa   
         state: present 
-    - name: Atualizar listas de pacotes 
+
+    - name: Update package lists
       apt: 
         update_cache: yes
+
     - name: Java Instalation
       apt:
         name: openjdk-11-jdk
         state: present
+
     - name: Create Directory app
       file:
         path: /opt/notes
         state: directory
         owner: app
         group: app
-    - name: Configurar o Git para adicionar exceção para o diretório seguro  
+
+    - name: Configure Git to add a exception to safe directory
       command: git config --global --add safe.directory /opt/notes
+      
     - name: Clone repository notes - app
       git:
         repo: 'https://github.com/callicoder/spring-boot-mysql-rest-api-tutorial.git'
         dest: /opt/notes
         clone: yes
         force: yes
+
     - name: Configure property archive for database
       template:
         src: application.properties
         dest: /opt/notes/src/main/resources/application.properties
+
     - name: Configuration pom.xml
       template:
         src: pom.xml
         dest: /opt/notes/pom.xml
+
     - name: Gerate application package
       command: mvn -f /opt/notes/pom.xml package -DskipTests
+
     - name: Register package latest version
       shell:
         cmd: mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' exec:exec
         chdir: /opt/notes/
       register: app_version
+
     - name: Configure Systemd Service
       template:
         src: etc/systemd/system/notes.service
         dest: /etc/systemd/system/notes.service
       notify: reload daemon
+
     - name: start service notes
       service:
         name: notes
         state: restarted
+
   roles:
       - configure-default-so
+
   handlers:
     - name: reload app
       systemd:
         state: restarted
         daemon_reload: yes
         name: 'notes'
+
     - name: reload daemon
       systemd:
         daemon_reexec: yes
